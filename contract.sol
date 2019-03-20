@@ -72,6 +72,7 @@ contract ERC20 {
 contract Ownable {
   address public buyer;
   address public seller;
+  address public admin;
 
   event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
   event SellerTransferred(address indexed previousSeller, address indexed newSeller);
@@ -97,6 +98,16 @@ contract Ownable {
     _;
   }
 
+  modifier onlyAdmin() {
+    require(msg.sender == admin);
+    _;
+  }
+
+  modifier anyParty() {
+    require(msg.sender == seller || msg.sender == buyer);
+    _;
+  }
+
   /**
    * @dev Allows the current owner to transfer control of the contract to a newOwner.
    * @param newOwner The address to transfer ownership to.
@@ -119,7 +130,6 @@ contract EscrowDeal is Ownable {
     using SafeMath for uint256;
 
     ERC20 token;
-    address public admin;
 
     bool workAccepted = false;
     bool workDone = false;
@@ -127,7 +137,7 @@ contract EscrowDeal is Ownable {
 
     event approvedByBuyer(address indexed from, bool value);
     event approvedBySeller(address indexed from, bool value);
-    event disputeEvent(bool value);
+    event disputeEvent(bool value, address indexed party);
 
     constructor (address _token, address _seller, address _admin) public {
         admin = _admin;
@@ -137,11 +147,13 @@ contract EscrowDeal is Ownable {
 
     function buyerApprove() public onlyBuyer {
         workAccepted = true;
+        emit approvedByBuyer(buyer, workAccepted);
         checkConsensus();
     }
 
     function sellerApprove() public onlySeller {
         workDone = true;
+        emit approvedBySeller(seller, workDone);
         checkConsensus();
     }
 
@@ -163,17 +175,17 @@ contract EscrowDeal is Ownable {
     }
 
     function rejectWork() public onlyBuyer {
-        workAccepted = false;
+        workDone = false;
     }
 
-    function disputeContract() public onlyBuyer {
+    function disputeContract() public anyParty {
         dispute = true;
-        emit disputeEvent(dispute);
+        emit disputeEvent(dispute, msg.sender);
     }
 
-    function resolveDispute(bool approval) public {
-        require(msg.sender == admin);
+    function resolveDispute(bool approval) public onlyAdmin {
         if(approval) transferTokens(buyer);
         else transferTokens(seller);
     }
 }
+
